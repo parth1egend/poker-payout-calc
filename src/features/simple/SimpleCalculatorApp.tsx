@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createId } from "@/lib/ids";
 import { formatMoney, formatSignedMoney, parseMoneyInput, toAbsoluteMoney } from "@/lib/money";
@@ -83,6 +83,49 @@ export const SimpleCalculatorApp = () => {
     () => balances.reduce((sum, item) => sum + item.balanceMinor, 0),
     [balances]
   );
+  const correctedBalanceMap = useMemo(
+    () => new Map(correction.correctedBalances.map((balance) => [balance.playerId, balance.balanceMinor])),
+    [correction.correctedBalances]
+  );
+  const nameFor = useCallback(
+    (rowId: string): string => activeRows.find((row) => row.id === rowId)?.name.trim() || "Unknown",
+    [activeRows]
+  );
+  const rankedRows = useMemo(
+    () =>
+      activeRows
+        .map((row) => {
+          const rawMinor = rowBalance(row, state.mode);
+          return {
+            id: row.id,
+            name: row.name.trim(),
+            rawMinor,
+            finalMinor: correctedBalanceMap.get(row.id) ?? rawMinor
+          };
+        })
+        .sort((left, right) => right.finalMinor - left.finalMinor || left.name.localeCompare(right.name)),
+    [activeRows, correctedBalanceMap, state.mode]
+  );
+  const adjustmentRows = useMemo(
+    () =>
+      correction.correctionRows
+        .map((row) => {
+          const originalMinor = balances.find((balance) => balance.playerId === row.playerId)?.balanceMinor ?? 0;
+          const correctedMinor = correctedBalanceMap.get(row.playerId) ?? originalMinor;
+          return {
+            playerId: row.playerId,
+            name: nameFor(row.playerId),
+            originalMinor,
+            correctedMinor,
+            adjustmentMinor: row.adjustmentMinor
+          };
+        })
+        .sort(
+          (left, right) =>
+            Math.abs(right.adjustmentMinor) - Math.abs(left.adjustmentMinor) || left.name.localeCompare(right.name)
+        ),
+    [balances, correctedBalanceMap, correction.correctionRows, nameFor]
+  );
 
   const totals = useMemo(
     () =>
@@ -96,8 +139,6 @@ export const SimpleCalculatorApp = () => {
       ),
     [state.mode, state.rows]
   );
-
-  const nameFor = (rowId: string): string => activeRows.find((row) => row.id === rowId)?.name.trim() || "Unknown";
 
   const updateRow = (rowId: string, partial: Partial<CalculatorRow>) => {
     setState((current) => ({
@@ -226,97 +267,170 @@ export const SimpleCalculatorApp = () => {
             </div>
           </div>
 
-          <div className="player-table">
-            <div className={state.mode === "cashflow" ? "player-table-head four" : "player-table-head two"}>
-              <span>Player Name</span>
-              {state.mode === "cashflow" ? <span>Total In</span> : null}
-              {state.mode === "cashflow" ? <span>Total Out</span> : null}
-              <span>Net</span>
-            </div>
-
+          <div className="player-card-list">
             {state.rows.map((row) => {
               const netMinor = rowBalance(row, state.mode);
 
               return (
-                <div key={row.id} className={state.mode === "cashflow" ? "player-row four" : "player-row two"}>
-                  <div className="name-cell">
-                    <span className={row.name.trim() ? "player-dot active" : "player-dot"} />
-                    <input
-                      aria-label="Player name"
-                      className="table-input name"
-                      value={row.name}
-                      placeholder="Player name"
-                      onChange={(event) => updateRow(row.id, { name: event.target.value })}
-                    />
+                <article key={row.id} className="player-card">
+                  <div className="player-card-header">
+                    <div className="name-cell">
+                      <span className={row.name.trim() ? "player-dot active" : "player-dot"} />
+                      <input
+                        aria-label="Player name"
+                        className="player-name-input"
+                        value={row.name}
+                        placeholder="Player name"
+                        onChange={(event) => updateRow(row.id, { name: event.target.value })}
+                      />
+                    </div>
+                    <button type="button" className="row-delete" onClick={() => removeRow(row.id)} aria-label="Remove player">
+                      ×
+                    </button>
                   </div>
 
-                  {state.mode === "cashflow" ? (
-                    <input
-                      aria-label="Total in"
-                      inputMode="numeric"
-                      className="table-input amount"
-                      value={numberValue(row.totalInMinor)}
-                      placeholder="0"
-                      onChange={(event) =>
-                        updateRow(row.id, {
-                          totalInMinor: Math.max(0, parseMoneyInput(event.target.value, 1))
-                        })
-                      }
-                    />
-                  ) : null}
+                  <div className="player-card-body">
+                    <div className={state.mode === "cashflow" ? "player-fields" : "player-fields single"}>
+                      {state.mode === "cashflow" ? (
+                        <>
+                          <label className="field-chip">
+                            <span>In</span>
+                            <input
+                              aria-label="Total in"
+                              inputMode="numeric"
+                              className="field-chip-input"
+                              value={numberValue(row.totalInMinor)}
+                              placeholder="0"
+                              onChange={(event) =>
+                                updateRow(row.id, {
+                                  totalInMinor: Math.max(0, parseMoneyInput(event.target.value, 1))
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="field-chip">
+                            <span>Out</span>
+                            <input
+                              aria-label="Total out"
+                              inputMode="numeric"
+                              className="field-chip-input"
+                              value={numberValue(row.totalOutMinor)}
+                              placeholder="0"
+                              onChange={(event) =>
+                                updateRow(row.id, {
+                                  totalOutMinor: Math.max(0, parseMoneyInput(event.target.value, 1))
+                                })
+                              }
+                            />
+                          </label>
+                        </>
+                      ) : (
+                        <label className="field-chip wide">
+                          <span>Net</span>
+                          <input
+                            aria-label="Net profit"
+                            inputMode="numeric"
+                            className={`field-chip-input ${netMinor > 0 ? "positive" : netMinor < 0 ? "negative" : ""}`}
+                            value={numberValue(row.netMinor)}
+                            placeholder="0"
+                            onChange={(event) =>
+                              updateRow(row.id, {
+                                netMinor: parseMoneyInput(event.target.value, 1)
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
 
-                  {state.mode === "cashflow" ? (
-                    <input
-                      aria-label="Total out"
-                      inputMode="numeric"
-                      className="table-input amount"
-                      value={numberValue(row.totalOutMinor)}
-                      placeholder="0"
-                      onChange={(event) =>
-                        updateRow(row.id, {
-                          totalOutMinor: Math.max(0, parseMoneyInput(event.target.value, 1))
-                        })
-                      }
-                    />
-                  ) : null}
-
-                  {state.mode === "net" ? (
-                    <input
-                      aria-label="Net profit"
-                      inputMode="numeric"
-                      className={`table-input amount net-field ${netMinor > 0 ? "positive" : netMinor < 0 ? "negative" : ""}`}
-                      value={numberValue(row.netMinor)}
-                      placeholder="0"
-                      onChange={(event) =>
-                        updateRow(row.id, {
-                          netMinor: parseMoneyInput(event.target.value, 1)
-                        })
-                      }
-                    />
-                  ) : (
                     <div className={`net-pill ${netMinor > 0 ? "positive" : netMinor < 0 ? "negative" : ""}`}>
                       {formatSignedMoney(netMinor, state.currencyLabel, 1)}
                     </div>
-                  )}
-
-                  <button type="button" className="row-delete" onClick={() => removeRow(row.id)} aria-label="Remove player">
-                    ×
-                  </button>
-                </div>
+                  </div>
+                </article>
               );
             })}
 
-            <div className={state.mode === "cashflow" ? "player-total four" : "player-total two"}>
+            <article className="player-total-card">
               <strong>Total</strong>
-              {state.mode === "cashflow" ? <strong>{formatMoney(totals.totalInMinor, state.currencyLabel, 1)}</strong> : null}
-              {state.mode === "cashflow" ? <strong>{formatMoney(totals.totalOutMinor, state.currencyLabel, 1)}</strong> : null}
-              <strong className={totals.netMinor === 0 ? "" : totals.netMinor > 0 ? "positive-text" : "negative-text"}>
-                {formatSignedMoney(totals.netMinor, state.currencyLabel, 1)}
-              </strong>
-            </div>
+              <div className="player-total-metrics">
+                {state.mode === "cashflow" ? <span>In: {formatMoney(totals.totalInMinor, state.currencyLabel, 1)}</span> : null}
+                {state.mode === "cashflow" ? <span>Out: {formatMoney(totals.totalOutMinor, state.currencyLabel, 1)}</span> : null}
+                <span className={totals.netMinor === 0 ? "" : totals.netMinor > 0 ? "positive-text" : "negative-text"}>
+                  Net: {formatSignedMoney(totals.netMinor, state.currencyLabel, 1)}
+                </span>
+              </div>
+            </article>
           </div>
 
           <p className="panel-note">Positive net means the player should receive. Negative net means the player should pay.</p>
+        </section>
+
+        <section className="panel-card reconciliation-card">
+          <div className="panel-header">
+            <div>
+              <h2>Balance Reconciliation</h2>
+              <p>
+                Initial net position was {formatSignedMoney(imbalanceMinor, state.currencyLabel, 1)}.
+                {correction.correctionRows.length > 0 ? " Adjustments applied to resolve discrepancy." : " No adjustment needed."}
+              </p>
+            </div>
+          </div>
+
+          <div className="reconciliation-status">
+            <span className={correction.imbalanceAfterMinor === 0 ? "status-badge success" : "status-badge warning"}>
+              {correction.imbalanceAfterMinor === 0 ? "Balances Zeroed" : "Needs Attention"}
+            </span>
+          </div>
+
+          {adjustmentRows.length > 0 ? (
+            <div className="adjustment-grid">
+              {adjustmentRows.map((row) => (
+                <div key={row.playerId} className="adjustment-row">
+                  <div className="adjustment-row-main">
+                    <span className="player-dot active" />
+                    <strong>{row.name}</strong>
+                  </div>
+                  <div className="adjustment-values">
+                    <span className="adjustment-original">{formatSignedMoney(row.originalMinor, state.currencyLabel, 1)}</span>
+                    <span className={`adjustment-final ${row.correctedMinor > 0 ? "positive-text" : row.correctedMinor < 0 ? "negative-text" : ""}`}>
+                      {formatSignedMoney(row.correctedMinor, state.currencyLabel, 1)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="panel-card">
+          <div className="panel-header">
+            <div>
+              <h2>Profit Ranking</h2>
+              <p>Final positions ordered from biggest winner to biggest loser.</p>
+            </div>
+          </div>
+
+          <div className="ranking-table">
+            <div className="ranking-head">
+              <span>Rank</span>
+              <span>Player</span>
+              <span>Profit</span>
+            </div>
+            {rankedRows.length === 0 ? (
+              <div className="empty-state">Enter players to see the ranking board.</div>
+            ) : (
+              rankedRows.map((row, index) => (
+                <div key={row.id} className="ranking-row">
+                  <span className="rank-pill">#{index + 1}</span>
+                  <strong>{row.name}</strong>
+                  <span className={`ranking-amount ${row.finalMinor > 0 ? "positive-text" : row.finalMinor < 0 ? "negative-text" : ""}`}>
+                    {formatSignedMoney(row.finalMinor, state.currencyLabel, 1)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </section>
 
         <section className="panel-card">
