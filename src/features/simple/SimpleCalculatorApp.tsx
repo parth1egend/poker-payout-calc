@@ -79,6 +79,10 @@ export const SimpleCalculatorApp = () => {
 
   const correction = useMemo(() => applyImbalanceCorrection(balances), [balances]);
   const payments = useMemo(() => simplifyPayments(correction.correctedBalances), [correction.correctedBalances]);
+  const imbalanceMinor = useMemo(
+    () => balances.reduce((sum, item) => sum + item.balanceMinor, 0),
+    [balances]
+  );
 
   const totals = useMemo(
     () =>
@@ -135,6 +139,29 @@ export const SimpleCalculatorApp = () => {
           <h1>Payout Tables</h1>
           <p className="brand-subtitle">Enter buy-ins and payouts or direct net profit. The table settles instantly.</p>
         </header>
+
+        <section className="summary-strip">
+          <article className="summary-chip">
+            <span>Players</span>
+            <strong>{activeRows.length}</strong>
+          </article>
+          <article className="summary-chip">
+            <span>Transfers</span>
+            <strong>{payments.length}</strong>
+          </article>
+          <article className="summary-chip">
+            <span>{state.mode === "cashflow" ? "Table In" : "Net Sum"}</span>
+            <strong>
+              {state.mode === "cashflow"
+                ? formatMoney(totals.totalInMinor, state.currencyLabel, 1)
+                : formatSignedMoney(imbalanceMinor, state.currencyLabel, 1)}
+            </strong>
+          </article>
+          <article className="summary-chip accent">
+            <span>Status</span>
+            <strong>{imbalanceMinor === 0 ? "Balanced" : "Adjusted"}</strong>
+          </article>
+        </section>
 
         <section className="toolbar-card">
           <div className="segmented-control" role="tablist" aria-label="Entry mode">
@@ -212,13 +239,16 @@ export const SimpleCalculatorApp = () => {
 
               return (
                 <div key={row.id} className={state.mode === "cashflow" ? "player-row four" : "player-row two"}>
-                  <input
-                    aria-label="Player name"
-                    className="table-input name"
-                    value={row.name}
-                    placeholder="Player name"
-                    onChange={(event) => updateRow(row.id, { name: event.target.value })}
-                  />
+                  <div className="name-cell">
+                    <span className={row.name.trim() ? "player-dot active" : "player-dot"} />
+                    <input
+                      aria-label="Player name"
+                      className="table-input name"
+                      value={row.name}
+                      placeholder="Player name"
+                      onChange={(event) => updateRow(row.id, { name: event.target.value })}
+                    />
+                  </div>
 
                   {state.mode === "cashflow" ? (
                     <input
@@ -300,6 +330,7 @@ export const SimpleCalculatorApp = () => {
           <div className="settlement-table">
             <div className="settlement-head">
               <span>From (Loser)</span>
+              <span />
               <span>To (Winner)</span>
               <span>Amount</span>
             </div>
@@ -309,9 +340,18 @@ export const SimpleCalculatorApp = () => {
             ) : (
               payments.map((payment, index) => (
                 <div key={`${payment.fromPlayerId}-${payment.toPlayerId}-${index}`} className="settlement-row">
-                  <span>{nameFor(payment.fromPlayerId)}</span>
-                  <span>{nameFor(payment.toPlayerId)}</span>
-                  <strong>{toAbsoluteMoney(payment.amountMinor, state.currencyLabel, 1)}</strong>
+                  <div className="settlement-player from">
+                    <span className="settlement-label">From</span>
+                    <strong>{nameFor(payment.fromPlayerId)}</strong>
+                  </div>
+                  <div className="settlement-flow" aria-hidden="true">
+                    <span className="flow-arrow">→</span>
+                  </div>
+                  <div className="settlement-player to">
+                    <span className="settlement-label">To</span>
+                    <strong>{nameFor(payment.toPlayerId)}</strong>
+                  </div>
+                  <strong className="amount-badge">{toAbsoluteMoney(payment.amountMinor, state.currencyLabel, 1)}</strong>
                 </div>
               ))
             )}
