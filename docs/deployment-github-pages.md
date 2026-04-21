@@ -14,42 +14,33 @@ npm run build
 npm run preview
 ```
 
-## Base path configuration
+## Base path behavior
 
-`vite.config.ts` resolves `base` like this:
+`vite.config.ts` resolves `base` in this order:
 
-1. If `VITE_BASE_PATH` is set, that wins.
-2. Otherwise, if `GITHUB_PAGES=true` and `GITHUB_REPOSITORY` is available, the app uses `/<repo>/`.
-3. Otherwise it falls back to `/`.
+1. `VITE_BASE_PATH` if provided
+2. `/<repo>/` when `GITHUB_PAGES=true` and `GITHUB_REPOSITORY` is set
+3. `/` fallback
 
 Examples:
 
-- User site: `VITE_BASE_PATH=/ npm run build`
-- Project site: `VITE_BASE_PATH=/poker-payout-calc/ npm run build`
+- user site build: `VITE_BASE_PATH=/ npm run build`
+- project site build: `VITE_BASE_PATH=/poker-payout-calc/ npm run build`
 
-The GitHub Actions workflow already sets the right behavior for standard project-site deployment.
-
-## Why hash routing was chosen
-
-GitHub Pages is static hosting with no general server-side SPA rewrites. `HashRouter` avoids refresh and deep-link issues because the browser only requests the main HTML file; the route lives after `#`.
-
-That makes deployment more robust than `BrowserRouter` for this MVP.
+The included GitHub Actions workflow sets the right environment for project-site deployment.
 
 ## Deploy steps
 
-1. Push the repo to GitHub.
-2. Ensure the default branch is `main`.
-3. Open `Settings > Pages`.
-4. Choose `GitHub Actions` as the deployment source.
-5. Push a commit to `main` or run the workflow manually.
-6. Wait for `.github/workflows/deploy-pages.yml` to finish.
+1. Push repository to GitHub
+2. Set default branch to `main`
+3. In GitHub: `Settings > Pages`
+4. Choose `GitHub Actions` as source
+5. Push to `main` (or trigger workflow manually)
+6. Wait for `.github/workflows/deploy-pages.yml` to complete
 
-The site URL will be shown in the workflow and in GitHub Pages settings.
+## Updates
 
-## Updating the site later
-
-1. Make code changes locally.
-2. Run:
+For each update:
 
 ```bash
 npm run lint
@@ -57,15 +48,14 @@ npm run test
 npm run build
 ```
 
-3. Commit and push to `main`.
-4. GitHub Actions rebuilds and redeploys automatically.
+Then commit and push. GitHub Actions rebuilds and redeploys.
 
 ## iPhone / Safari storage note
 
-The MVP stores all data in browser storage on the device. That means:
+The app persists state in browser storage (IndexedDB) on-device:
 
-- the data does not sync across devices
-- clearing Safari website data can remove the app data
-- uninstalling the home-screen shortcut may remove or orphan storage depending on OS/browser behavior
+- data does not sync across devices
+- clearing Safari site data removes saved rows
+- reinstalling or browser cleanup may wipe local state
 
-For real-world use, export JSON backups regularly before OS resets, browser cleanup, or phone migration.
+Treat the app as local-first storage unless a backend sync layer is added later.

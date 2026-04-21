@@ -1,40 +1,13 @@
 import Dexie, { type Table } from "dexie";
 
-import { createId, nowIso } from "@/lib/ids";
+import {
+  createDefaultCalculatorState,
+  normalizeCalculatorState,
+  type CalculatorState
+} from "@/lib/simple-state-schema";
 
-export type EntryMode = "cashflow" | "net";
-
-export interface CalculatorRow {
-  id: string;
-  name: string;
-  totalInMinor: number;
-  totalOutMinor: number;
-  netMinor: number;
-}
-
-export interface CalculatorState {
-  id: "current";
-  mode: EntryMode;
-  currencyLabel: string;
-  rows: CalculatorRow[];
-  updatedAt: string;
-}
-
-const createBlankRow = (): CalculatorRow => ({
-  id: createId(),
-  name: "",
-  totalInMinor: 0,
-  totalOutMinor: 0,
-  netMinor: 0
-});
-
-export const createDefaultCalculatorState = (): CalculatorState => ({
-  id: "current",
-  mode: "cashflow",
-  currencyLabel: "USD",
-  rows: [createBlankRow(), createBlankRow(), createBlankRow(), createBlankRow()],
-  updatedAt: nowIso()
-});
+export type { CalculatorRow, CalculatorState, EntryMode } from "@/lib/simple-state-schema";
+export { createDefaultCalculatorState } from "@/lib/simple-state-schema";
 
 class SimpleCalculatorDatabase extends Dexie {
   calculatorState!: Table<CalculatorState, "current">;
@@ -58,7 +31,9 @@ export const getCalculatorState = async (): Promise<CalculatorState> => {
   const existing = await calculatorDb.calculatorState.get("current");
 
   if (existing) {
-    return existing;
+    const normalized = normalizeCalculatorState(existing);
+    await calculatorDb.calculatorState.put(normalized);
+    return normalized;
   }
 
   const initial = createDefaultCalculatorState();
@@ -67,11 +42,7 @@ export const getCalculatorState = async (): Promise<CalculatorState> => {
 };
 
 export const saveCalculatorState = async (state: CalculatorState): Promise<void> => {
-  await calculatorDb.calculatorState.put({
-    ...state,
-    id: "current",
-    updatedAt: nowIso()
-  });
+  await calculatorDb.calculatorState.put(normalizeCalculatorState(state));
 };
 
 export const resetCalculatorState = async (): Promise<CalculatorState> => {

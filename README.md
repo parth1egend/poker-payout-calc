@@ -1,33 +1,36 @@
-# Poker Settlement
+# Poker Payout Calculator
 
-Poker Settlement is a static React + TypeScript PWA for tracking poker-night finances: players, sessions, multiple games, ledger entries, combined balances, proportional imbalance correction, simplified final transfers, threshold-based ignored payments, and local JSON backup.
+Single-page, mobile-first poker settlement app. Enter player names and either:
 
-The MVP is intentionally backend-free. All data is stored locally in IndexedDB and the app is designed for GitHub Pages hosting and iPhone Safari home-screen use.
+- buy-in / payout totals, or
+- direct net profit/loss values
 
-## Features
+The app instantly computes:
 
-- Reusable player list with archive support
-- Session creation with active-player selection
-- Multiple games per session, each with its own ledger
-- Buy-ins, rebuys, payouts, manual corrections, and note rows
-- Per-game and combined balances
-- Deterministic imbalance correction with integer remainder handling
-- Greedy transfer simplification
-- Threshold split for small transfers
-- Saved settlement-run history
-- Copyable settlement and session summaries
-- JSON backup export/import
-- Offline-ready PWA with service worker and install metadata
+- corrected final balances (if totals are not zero),
+- a ranked profit table (highest winner first),
+- and a deterministic who-pays-whom settlement table.
+
+No backend is used. State is stored locally in IndexedDB.
+
+## Current features
+
+- One-screen workflow optimized for phone usage
+- Two input modes: `Buy-in / Payout` and `Net Profit`
+- Deterministic imbalance correction with integer arithmetic
+- Greedy transfer simplification (`from`, `to`, `amount`)
+- Profit ranking board
+- Local autosave in IndexedDB
+- Offline-ready PWA (manifest + service worker)
 
 ## Stack
 
 - React 18
 - TypeScript
 - Vite 5
-- Dexie / IndexedDB
-- React Router with `HashRouter`
-- Vitest for pure logic tests
-- Vite PWA plugin
+- Dexie (IndexedDB)
+- Vitest
+- vite-plugin-pwa
 
 ## Local development
 
@@ -36,9 +39,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite. Because the app uses `HashRouter`, route refreshes work cleanly on static hosting and in local preview.
-
-## Production build
+## Quality checks
 
 ```bash
 npm run lint
@@ -46,28 +47,18 @@ npm run test
 npm run build
 ```
 
-The build output goes to `dist/`.
-
 ## GitHub Pages deployment
 
-This repo includes `.github/workflows/deploy-pages.yml`.
+Deployment workflow is included at [.github/workflows/deploy-pages.yml](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/.github/workflows/deploy-pages.yml).
 
-1. Push the repository to GitHub.
-2. Make sure the default branch is `main`.
-3. In GitHub, open `Settings > Pages`.
-4. Set `Build and deployment` to `GitHub Actions`.
-5. Push to `main` or manually run the workflow.
+1. Push to `main`
+2. In GitHub: `Settings > Pages`
+3. Set source to `GitHub Actions`
+4. Run/trigger the workflow
 
-The workflow sets `GITHUB_PAGES=true`, which makes Vite use `/<repo>/` as the build base path automatically. For user-site hosting or custom manual builds, see [docs/deployment-github-pages.md](docs/deployment-github-pages.md).
+## Docs
 
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Settlement Logic](docs/settlement-logic.md)
-- [Deployment on GitHub Pages](docs/deployment-github-pages.md)
-- [Data Model](docs/data-model.md)
-
-## Notes
-
-- The app stores money as integer minor units. The default is whole INR (`moneyScale = 1`).
-- The imported product brief contains a sign/correction ambiguity. The implementation chooses the zero-sum-safe correction behavior and documents it in [docs/settlement-logic.md](docs/settlement-logic.md).
+- [Architecture](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/docs/architecture.md)
+- [Settlement Logic](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/docs/settlement-logic.md)
+- [Deployment on GitHub Pages](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/docs/deployment-github-pages.md)
+- [Data Model](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/docs/data-model.md)

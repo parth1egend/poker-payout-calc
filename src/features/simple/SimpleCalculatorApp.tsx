@@ -60,7 +60,11 @@ export const SimpleCalculatorApp = () => {
       return;
     }
 
-    saveCalculatorState(state).catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      saveCalculatorState(state).catch(() => undefined);
+    }, 180);
+
+    return () => window.clearTimeout(timer);
   }, [ready, state]);
 
   const activeRows = useMemo(
@@ -87,9 +91,13 @@ export const SimpleCalculatorApp = () => {
     () => new Map(correction.correctedBalances.map((balance) => [balance.playerId, balance.balanceMinor])),
     [correction.correctedBalances]
   );
-  const nameFor = useCallback(
-    (rowId: string): string => activeRows.find((row) => row.id === rowId)?.name.trim() || "Unknown",
+  const activeNameMap = useMemo(
+    () => new Map(activeRows.map((row) => [row.id, row.name.trim()])),
     [activeRows]
+  );
+  const nameFor = useCallback(
+    (rowId: string): string => activeNameMap.get(rowId) || "Unknown",
+    [activeNameMap]
   );
   const rankedRows = useMemo(
     () =>
@@ -198,7 +206,7 @@ export const SimpleCalculatorApp = () => {
                 : formatSignedMoney(imbalanceMinor, state.currencyLabel, 1)}
             </strong>
           </article>
-          <article className="summary-chip accent">
+          <article className={`summary-chip ${imbalanceMinor === 0 ? "status-balanced" : "status-adjusted"}`}>
             <span>Status</span>
             <strong>{imbalanceMinor === 0 ? "Balanced" : "Adjusted"}</strong>
           </article>
@@ -270,6 +278,7 @@ export const SimpleCalculatorApp = () => {
           <div className="player-card-list">
             {state.rows.map((row) => {
               const netMinor = rowBalance(row, state.mode);
+              const parsePositiveMinor = (value: string): number => Math.max(0, parseMoneyInput(value, 1));
 
               return (
                 <article key={row.id} className="player-card">
@@ -303,7 +312,7 @@ export const SimpleCalculatorApp = () => {
                               placeholder="0"
                               onChange={(event) =>
                                 updateRow(row.id, {
-                                  totalInMinor: Math.max(0, parseMoneyInput(event.target.value, 1))
+                                  totalInMinor: parsePositiveMinor(event.target.value)
                                 })
                               }
                             />
@@ -318,7 +327,7 @@ export const SimpleCalculatorApp = () => {
                               placeholder="0"
                               onChange={(event) =>
                                 updateRow(row.id, {
-                                  totalOutMinor: Math.max(0, parseMoneyInput(event.target.value, 1))
+                                  totalOutMinor: parsePositiveMinor(event.target.value)
                                 })
                               }
                             />
@@ -411,25 +420,43 @@ export const SimpleCalculatorApp = () => {
             </div>
           </div>
 
-          <div className="ranking-table">
-            <div className="ranking-head">
-              <span>Rank</span>
-              <span>Player</span>
-              <span>Profit</span>
-            </div>
-            {rankedRows.length === 0 ? (
-              <div className="empty-state">Enter players to see the ranking board.</div>
-            ) : (
-              rankedRows.map((row, index) => (
-                <div key={row.id} className="ranking-row">
-                  <span className="rank-pill">#{index + 1}</span>
-                  <strong>{row.name}</strong>
-                  <span className={`ranking-amount ${row.finalMinor > 0 ? "positive-text" : row.finalMinor < 0 ? "negative-text" : ""}`}>
-                    {formatSignedMoney(row.finalMinor, state.currencyLabel, 1)}
-                  </span>
-                </div>
-              ))
-            )}
+          <div className="table-shell">
+            <table className="ranking-table" role="table" aria-label="Profit ranking">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankedRows.length === 0 ? (
+                  <tr>
+                    <td className="empty-state-cell" colSpan={3}>
+                      Enter players to see the ranking board.
+                    </td>
+                  </tr>
+                ) : (
+                  rankedRows.map((row, index) => (
+                    <tr key={row.id}>
+                      <td>
+                        <span className="rank-pill">#{index + 1}</span>
+                      </td>
+                      <td>
+                        <strong>{row.name}</strong>
+                      </td>
+                      <td>
+                        <span
+                          className={`ranking-amount ${row.finalMinor > 0 ? "positive-text" : row.finalMinor < 0 ? "negative-text" : ""}`}
+                        >
+                          {formatSignedMoney(row.finalMinor, state.currencyLabel, 1)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -441,34 +468,39 @@ export const SimpleCalculatorApp = () => {
             </div>
           </div>
 
-          <div className="settlement-table">
-            <div className="settlement-head">
-              <span>From (Loser)</span>
-              <span />
-              <span>To (Winner)</span>
-              <span>Amount</span>
-            </div>
-
-            {payments.length === 0 ? (
-              <div className="empty-state">Add player numbers to generate the who-pays-whom table.</div>
-            ) : (
-              payments.map((payment, index) => (
-                <div key={`${payment.fromPlayerId}-${payment.toPlayerId}-${index}`} className="settlement-row">
-                  <div className="settlement-player from">
-                    <span className="settlement-label">From</span>
-                    <strong>{nameFor(payment.fromPlayerId)}</strong>
-                  </div>
-                  <div className="settlement-flow" aria-hidden="true">
-                    <span className="flow-arrow">→</span>
-                  </div>
-                  <div className="settlement-player to">
-                    <span className="settlement-label">To</span>
-                    <strong>{nameFor(payment.toPlayerId)}</strong>
-                  </div>
-                  <strong className="amount-badge">{toAbsoluteMoney(payment.amountMinor, state.currencyLabel, 1)}</strong>
-                </div>
-              ))
-            )}
+          <div className="table-shell">
+            <table className="settlement-table" role="table" aria-label="Settlement plan">
+              <thead>
+                <tr>
+                  <th>From (Loser)</th>
+                  <th>To (Winner)</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.length === 0 ? (
+                  <tr>
+                    <td className="empty-state-cell" colSpan={3}>
+                      Add player numbers to generate the who-pays-whom table.
+                    </td>
+                  </tr>
+                ) : (
+                  payments.map((payment, index) => (
+                    <tr key={`${payment.fromPlayerId}-${payment.toPlayerId}-${index}`}>
+                      <td>
+                        <strong>{nameFor(payment.fromPlayerId)}</strong>
+                      </td>
+                      <td>
+                        <strong>{nameFor(payment.toPlayerId)}</strong>
+                      </td>
+                      <td>
+                        <strong className="amount-badge">{toAbsoluteMoney(payment.amountMinor, state.currencyLabel, 1)}</strong>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
           {correction.correctionRows.length > 0 ? (

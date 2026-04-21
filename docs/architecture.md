@@ -2,48 +2,48 @@
 
 ## Overview
 
-The app is a static client-side PWA. There is no backend for the MVP. All durable state lives in IndexedDB through Dexie, and all settlement math is computed from stored ledger rows so results remain deterministic and auditable.
+The current app is intentionally narrow: a single-page payout calculator with local persistence.
 
-## Main layers
+- No backend
+- No user accounts
+- No multi-session workflow
+- No cross-device sync
 
-1. UI layer
-   React pages in `src/features/*` render the mobile-first screens:
-   - Sessions
-   - Players
-   - Session detail
-   - Game detail
-   - Settlement
-   - Backup / Settings
+Everything is client-side and deterministic.
 
-2. Persistence layer
-   `src/lib/db.ts` defines the IndexedDB schema and helper functions for CRUD, backup import/export, and settlement-run snapshots.
+## Runtime layers
 
-3. Domain / calculation layer
-   `src/lib/settlement-engine.ts` contains pure logic for:
-   - per-game nets
-   - combined balances
-   - imbalance correction
-   - greedy payment simplification
-   - threshold split
+1. UI layer  
+   [SimpleCalculatorApp.tsx](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/src/features/simple/SimpleCalculatorApp.tsx) renders:
+   - player input cards
+   - reconciliation panel
+   - profit ranking table
+   - settlement table
 
-4. Formatting / summary helpers
-   `src/lib/money.ts`, `src/lib/summary.ts`, and `src/lib/session-metrics.ts` format amounts and build copyable summaries without mixing those concerns into components.
+2. Persistence layer  
+   [simple-state.ts](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/src/lib/simple-state.ts) handles IndexedDB read/write via Dexie.
+   [simple-state-schema.ts](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/src/lib/simple-state-schema.ts) owns default state and normalization/validation.
 
-## Routing
+3. Money and settlement logic  
+   [money.ts](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/src/lib/money.ts) handles integer money parsing/formatting.  
+   [settlement-engine.ts](/mnt/c/Users/parth/Desktop/CODING/Poker/poker-payout-calc/src/lib/settlement-engine.ts) handles correction + transfer generation.
 
-The app uses `HashRouter` for maximum GitHub Pages compatibility:
+4. Build/PWA layer  
+   `vite` + `vite-plugin-pwa` provide static bundling, manifest, and service worker.
 
-- static hosting has no server-side route rewriting
-- refreshes on nested routes still work
-- Pages deployment remains trivial
+## Design decisions
 
-## Offline and PWA
+- Integer money only: avoids floating-point drift.
+- Pure settlement engine: math is testable and independent of React.
+- Normalized saved state: malformed or outdated local data is corrected on load.
+- Debounced persistence: reduces excessive IndexedDB writes during typing.
 
-`vite-plugin-pwa` generates the manifest and service worker. The configuration caches the app shell and static assets so the previously loaded app remains available offline.
+## Testing scope
 
-## Why this structure
+Current tests cover:
 
-- Trustworthy math: UI does not contain settlement formulas.
-- Auditability: settlement runs are snapshotted and stored locally.
-- Maintainability: small helpers keep pages focused on workflow.
-- GitHub Pages fit: the whole product ships as a static bundle.
+- settlement/correction logic
+- money parsing edge cases
+- calculator state normalization
+
+See `src/test`.

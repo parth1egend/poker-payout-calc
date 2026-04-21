@@ -1,4 +1,5 @@
-const DIGITS_ONLY = /[^\d-]/g;
+const CLEAN_NUMERIC_CHARS = /[^0-9.,+-]/g;
+const STRICT_NUMERIC_PATTERN = /^([+-])?(\d*)(?:\.(\d*))?$/;
 
 export const clampMinor = (value: number): number => {
   if (!Number.isSafeInteger(value)) {
@@ -15,21 +16,28 @@ export const parseMoneyInput = (value: string, scale: number): number => {
     return 0;
   }
 
-  if (scale === 1) {
-    const integerValue = Number.parseInt(trimmed.replace(DIGITS_ONLY, ""), 10);
-    return Number.isNaN(integerValue) ? 0 : clampMinor(integerValue);
+  const normalized = trimmed.replace(CLEAN_NUMERIC_CHARS, "").replaceAll(",", "");
+  const match = normalized.match(STRICT_NUMERIC_PATTERN);
+
+  if (!match) {
+    return 0;
   }
 
-  const negative = trimmed.startsWith("-");
-  const sanitized = trimmed.replace(/[^0-9.]/g, "");
-  const [wholePart = "0", fractionPart = ""] = sanitized.split(".");
-  const safeWhole = Number.parseInt(wholePart || "0", 10) || 0;
+  const [, sign = "", wholeDigits = "", fractionDigitsRaw = ""] = match;
+  const safeWhole = Number.parseInt(wholeDigits || "0", 10) || 0;
+
+  if (scale === 1) {
+    const signedWhole = sign === "-" ? -safeWhole : safeWhole;
+    return clampMinor(signedWhole);
+  }
+
   const fractionDigits = String(scale).length - 1;
-  const paddedFraction = `${fractionPart}${"0".repeat(fractionDigits)}`.slice(0, fractionDigits);
+  const paddedFraction = `${fractionDigitsRaw}${"0".repeat(fractionDigits)}`.slice(0, fractionDigits);
   const safeFraction = Number.parseInt(paddedFraction || "0", 10) || 0;
   const minor = safeWhole * scale + safeFraction;
+  const signedMinor = sign === "-" ? -minor : minor;
 
-  return clampMinor(negative ? -minor : minor);
+  return clampMinor(signedMinor);
 };
 
 export const formatMoney = (valueMinor: number, currencyLabel: string, scale: number): string => {

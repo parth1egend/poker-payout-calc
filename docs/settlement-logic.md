@@ -2,130 +2,64 @@
 
 ## Sign convention
 
-The app stores balances with this convention:
+- positive balance: player should receive money
+- negative balance: player should pay money
 
-- positive balance: the player should receive money
-- negative balance: the player should pay money
+## Input modes
 
-Per-entry effects:
+### `cashflow` mode
 
-- `buyIn`, `rebuy`: negative
-- `payout`: positive
-- `correction`: signed exactly as entered
-- `note`: zero
-
-Per-game net:
+Per-player raw net is computed as:
 
 ```text
-net = payouts - buy_ins - rebuys + manual_corrections
+net = totalOut - totalIn
 ```
 
-Combined session net is the sum of selected game nets.
+### `net` mode
 
-## Important note on the source brief
-
-The brief says:
-
-- if the combined sum is negative, reduce winners
-- if the combined sum is positive, reduce losers
-
-Under the positive-receives / negative-pays convention above, those directions do not mathematically return the system to zero. They move the total farther away from zero.
-
-To keep the product trustworthy and zero-sum, the implementation uses the equivalent correction that actually resolves the imbalance:
-
-- if the sum is negative, adjust losers toward zero proportionally
-- if the sum is positive, adjust winners toward zero proportionally
-
-This is the only way to satisfy all of the following at once:
-
-- integer arithmetic
-- deterministic correction
-- exact post-correction zero sum
-- positive = receive / negative = pay
+Per-player raw net is entered directly by the user.
 
 ## Imbalance correction
 
-Let `S` be the combined balance sum across selected games.
+Let `S = sum(all raw balances)`.
 
-### Case 1: `S = 0`
+- If `S = 0`: no correction
+- If `S < 0`: allocate `|S|` proportionally across losers (negative balances) to move them toward zero
+- If `S > 0`: allocate `S` proportionally across winners (positive balances) to move them toward zero
 
-No correction is needed.
+This keeps the post-correction system zero-sum when correction is possible.
 
-### Case 2: `S < 0`
+## Integer remainder handling
 
-The session is short overall. The app allocates `|S|` proportionally across players with negative balances.
+For proportional allocation:
 
-Each affected player gets a positive adjustment, moving them closer to zero.
-
-### Case 3: `S > 0`
-
-The session has excess payout overall. The app allocates `S` proportionally across players with positive balances.
-
-Each affected player gets a negative adjustment, moving them closer to zero.
-
-## Proportional allocation and integer remainder handling
-
-For each affected player:
-
-```text
-quota = total_correction * player_basis / total_basis
-```
-
-Because money is stored as integers:
-
-1. Take the floor of each quota.
-2. Compute the leftover remainder.
-3. Distribute leftover units one by one to the largest fractional remainders.
-4. Break exact ties deterministically by:
+1. compute floor allocation per participant
+2. compute remaining units
+3. distribute remainders by:
+   - larger fractional remainder first
    - larger basis first
-   - player id ascending
+   - player id lexicographic order (deterministic tie-break)
 
-This guarantees:
+All money is integer minor units, so no floating-point drift is introduced.
 
-- the total allocated correction is exact
-- the final corrected balances sum exactly to zero when correction is possible
-- repeated recomputation produces the same result
-
-## Greedy settlement algorithm
+## Settlement routing
 
 After correction:
 
-1. creditors = players with positive balances
-2. debtors = players with negative balances
-3. sort both by descending magnitude, then by id
-4. match largest debtor with largest creditor
-5. transfer `min(abs(debtor), creditor)`
-6. continue until all balances are settled
+1. build creditors (`balance > 0`)
+2. build debtors (`balance < 0`)
+3. sort both by descending absolute balance, then id
+4. greedily transfer `min(debtorRemaining, creditorRemaining)` until both lists are exhausted
 
-This is deterministic and usually minimal or near-minimal in transaction count for the standard debtor-creditor problem.
+Each transfer row is:
 
-## Threshold split
+```text
+fromPlayer -> toPlayer : amount
+```
 
-The app computes the full settlement first.
+## Ranking board
 
-Then it splits payments into:
+The Profit Ranking table uses corrected balances and is sorted:
 
-- main transfers: `amount >= threshold`
-- small transfers: `amount < threshold`
-
-Ignoring the small bucket is explicitly shown as non-exact settlement. The app also computes the carry-forward impact by player so the ignored residue is still transparent.
-
-## Example
-
-Raw corrected balances:
-
-- A: `+400`
-- B: `-250`
-- C: `-150`
-
-Greedy settlement:
-
-- B pays A `250`
-- C pays A `150`
-
-If threshold is `200`:
-
-- main transfer: `B -> A 250`
-- small transfer: `C -> A 150`
-
-Ignoring the small transfer means C still owes `150` and A is still short `150`.
+1. higher corrected profit first
+2. name ascending for ties
