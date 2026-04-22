@@ -14,12 +14,14 @@ export interface CalculatorState {
   id: "current";
   mode: EntryMode;
   currencyLabel: string;
+  thresholdMinor: number;
   rows: CalculatorRow[];
   updatedAt: string;
 }
 
 const MAX_ROWS = 150;
 const MAX_NAME_LENGTH = 80;
+const MAX_THRESHOLD_MINOR = 1_000_000_000;
 const CURRENCY_PATTERN = /^[A-Z]{2,6}$/;
 
 const isEntryMode = (value: unknown): value is EntryMode => value === "cashflow" || value === "net";
@@ -45,6 +47,7 @@ export const createDefaultCalculatorState = (): CalculatorState => ({
   id: "current",
   mode: "cashflow",
   currencyLabel: "USD",
+  thresholdMinor: 20,
   rows: [createBlankRow(), createBlankRow(), createBlankRow(), createBlankRow()],
   updatedAt: nowIso()
 });
@@ -81,6 +84,7 @@ export const normalizeCalculatorState = (candidate: unknown): CalculatorState =>
     id: "current",
     mode: isEntryMode(source.mode) ? source.mode : "cashflow",
     currencyLabel,
+    thresholdMinor: Math.max(0, Math.min(MAX_THRESHOLD_MINOR, toSafeInteger(source.thresholdMinor ?? 20))),
     rows,
     updatedAt: nowIso()
   };

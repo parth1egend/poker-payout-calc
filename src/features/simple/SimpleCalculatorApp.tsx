@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createId } from "@/lib/ids";
 import { formatMoney, formatSignedMoney, parseMoneyInput, toAbsoluteMoney } from "@/lib/money";
-import { applyImbalanceCorrection, simplifyPayments } from "@/lib/settlement-engine";
+import { applyImbalanceCorrection, simplifyPayments, splitPaymentsByThreshold } from "@/lib/settlement-engine";
 import {
   createDefaultCalculatorState,
   getCalculatorState,
@@ -16,6 +16,7 @@ import {
 const currencies = ["USD", "INR", "GBP", "EUR"];
 
 const numberValue = (minor: number): string => (minor === 0 ? "" : String(minor));
+const parsePositiveMinor = (value: string): number => Math.max(0, parseMoneyInput(value, 1));
 
 const createRow = (): CalculatorRow => ({
   id: createId(),
@@ -83,6 +84,16 @@ export const SimpleCalculatorApp = () => {
 
   const correction = useMemo(() => applyImbalanceCorrection(balances), [balances]);
   const payments = useMemo(() => simplifyPayments(correction.correctedBalances), [correction.correctedBalances]);
+  const paymentSplit = useMemo(
+    () => splitPaymentsByThreshold(payments, Math.max(0, state.thresholdMinor)),
+    [payments, state.thresholdMinor]
+  );
+  const [includeSmallTransfers, setIncludeSmallTransfers] = useState(false);
+  const settlementPayments = includeSmallTransfers ? payments : paymentSplit.mainPayments;
+  const ignoredTotalMinor = useMemo(
+    () => paymentSplit.smallPayments.reduce((sum, payment) => sum + payment.amountMinor, 0),
+    [paymentSplit.smallPayments]
+  );
   const imbalanceMinor = useMemo(
     () => balances.reduce((sum, item) => sum + item.balanceMinor, 0),
     [balances]
@@ -196,7 +207,7 @@ export const SimpleCalculatorApp = () => {
           </article>
           <article className="summary-chip">
             <span>Transfers</span>
-            <strong>{payments.length}</strong>
+            <strong>{settlementPayments.length}</strong>
           </article>
           <article className="summary-chip">
             <span>{state.mode === "cashflow" ? "Table In" : "Net Sum"}</span>
@@ -249,6 +260,22 @@ export const SimpleCalculatorApp = () => {
                 ))}
               </select>
             </label>
+            <label className="select-shell threshold-shell">
+              <span>Threshold</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={numberValue(state.thresholdMinor)}
+                placeholder="0"
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    thresholdMinor: parsePositiveMinor(event.target.value)
+                  }))
+                }
+                aria-label="Small transfer threshold"
+              />
+            </label>
             <button
               type="button"
               className="secondary-action"
@@ -278,7 +305,6 @@ export const SimpleCalculatorApp = () => {
           <div className="player-card-list">
             {state.rows.map((row) => {
               const netMinor = rowBalance(row, state.mode);
-              const parsePositiveMinor = (value: string): number => Math.max(0, parseMoneyInput(value, 1));
 
               return (
                 <article key={row.id} className="player-card">
@@ -464,8 +490,22 @@ export const SimpleCalculatorApp = () => {
           <div className="panel-header">
             <div>
               <h2>Settlement Plan</h2>
-              <p>Optimized transfer routing.</p>
+              <p>Optimized transfer routing with threshold split for tiny transfers.</p>
             </div>
+          </div>
+
+          <div className="settlement-options">
+            <label className="settlement-toggle">
+              <input
+                type="checkbox"
+                checked={includeSmallTransfers}
+                onChange={(event) => setIncludeSmallTransfers(event.target.checked)}
+              />
+              <span>Include small transfers below {toAbsoluteMoney(state.thresholdMinor, state.currencyLabel, 1)}</span>
+            </label>
+            <span className="settlement-meta">
+              Showing {settlementPayments.length} of {payments.length} transfers
+            </span>
           </div>
 
           <div className="table-shell">
@@ -478,14 +518,16 @@ export const SimpleCalculatorApp = () => {
                 </tr>
               </thead>
               <tbody>
-                {payments.length === 0 ? (
+                {settlementPayments.length === 0 ? (
                   <tr>
                     <td className="empty-state-cell" colSpan={3}>
-                      Add player numbers to generate the who-pays-whom table.
+                      {paymentSplit.smallPayments.length > 0
+                        ? "All current transfers are below the threshold and are listed in Small Transfers."
+                        : "Add player numbers to generate the who-pays-whom table."}
                     </td>
                   </tr>
                 ) : (
-                  payments.map((payment, index) => (
+                  settlementPayments.map((payment, index) => (
                     <tr key={`${payment.fromPlayerId}-${payment.toPlayerId}-${index}`}>
                       <td>
                         <strong>{nameFor(payment.fromPlayerId)}</strong>
@@ -493,7 +535,7 @@ export const SimpleCalculatorApp = () => {
                       <td>
                         <strong>{nameFor(payment.toPlayerId)}</strong>
                       </td>
-                      <td>
+                      <td className="settlement-amount-cell">
                         <strong className="amount-badge">{toAbsoluteMoney(payment.amountMinor, state.currencyLabel, 1)}</strong>
                       </td>
                     </tr>
@@ -502,6 +544,44 @@ export const SimpleCalculatorApp = () => {
               </tbody>
             </table>
           </div>
+
+          {paymentSplit.smallPayments.length > 0 ? (
+            <div className="small-transfer-panel">
+              <div className="small-transfer-header">
+                <strong>Small Transfers (Optional)</strong>
+                <span>
+                  Below {toAbsoluteMoney(state.thresholdMinor, state.currencyLabel, 1)}. Ignored total:{" "}
+                  {toAbsoluteMoney(ignoredTotalMinor, state.currencyLabel, 1)}
+                </span>
+              </div>
+              <div className="table-shell compact">
+                <table className="settlement-table settlement-table-small" role="table" aria-label="Small transfers">
+                  <thead>
+                    <tr>
+                      <th>From</th>
+                      <th>To</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentSplit.smallPayments.map((payment, index) => (
+                      <tr key={`small-${payment.fromPlayerId}-${payment.toPlayerId}-${index}`}>
+                        <td>
+                          <strong>{nameFor(payment.fromPlayerId)}</strong>
+                        </td>
+                        <td>
+                          <strong>{nameFor(payment.toPlayerId)}</strong>
+                        </td>
+                        <td className="settlement-amount-cell">
+                          <strong className="amount-badge small">{toAbsoluteMoney(payment.amountMinor, state.currencyLabel, 1)}</strong>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
 
           {correction.correctionRows.length > 0 ? (
             <div className="adjustment-strip">
@@ -513,8 +593,16 @@ export const SimpleCalculatorApp = () => {
             </div>
           ) : null}
 
-          {correction.warnings.length > 0 ? (
-            <div className="warning-strip">{correction.warnings.join(" ")}</div>
+          {correction.warnings.length > 0 || (!includeSmallTransfers && paymentSplit.smallPayments.length > 0) ? (
+            <div className="warning-strip">
+              {[...correction.warnings, paymentSplit.smallPayments.length > 0
+                ? includeSmallTransfers
+                  ? ""
+                  : "Ignoring small transfers means this main table is a practical approximation, not the exact mathematical settlement."
+                : ""]
+                .filter(Boolean)
+                .join(" ")}
+            </div>
           ) : null}
         </section>
       </div>

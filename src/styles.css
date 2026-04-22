@@ -259,6 +259,21 @@ select {
   color: var(--text);
 }
 
+.select-shell input {
+  width: 92px;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  text-align: right;
+}
+
+.select-shell input::placeholder {
+  color: #697488;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -577,11 +592,15 @@ select {
 }
 
 .ranking-table th:nth-child(3),
-.ranking-table td:nth-child(3),
+.ranking-table td:nth-child(3) {
+  width: 170px;
+  text-align: right;
+}
+
 .settlement-table th:nth-child(3),
 .settlement-table td:nth-child(3) {
   width: 170px;
-  text-align: right;
+  text-align: center;
 }
 
 .rank-pill {
@@ -610,6 +629,18 @@ select {
   background: rgba(76, 120, 255, 0.14);
   color: #d8e0ff;
   box-shadow: inset 0 0 0 1px rgba(76, 120, 255, 0.24);
+}
+
+.amount-badge.small {
+  min-height: 36px;
+  padding: 0 12px;
+  background: rgba(149, 161, 181, 0.14);
+  color: #d7dfef;
+  box-shadow: inset 0 0 0 1px rgba(149, 161, 181, 0.24);
+}
+
+.settlement-amount-cell {
+  text-align: center !important;
 }
 
 .empty-state-cell {
@@ -648,6 +679,62 @@ select {
 .warning-strip {
   background: rgba(240, 179, 75, 0.12);
   color: #ffd797;
+}
+
+.settlement-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.settlement-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.settlement-toggle input {
+  accent-color: var(--accent);
+}
+
+.settlement-meta {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.small-transfer-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(8, 13, 19, 0.3);
+}
+
+.small-transfer-header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.small-transfer-header strong {
+  color: #d7dfef;
+}
+
+.small-transfer-header span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.table-shell.compact {
+  gap: 0;
+}
+
+.settlement-table-small {
+  background: rgba(7, 10, 15, 0.45);
 }
 
 @media (max-width: 640px) {
@@ -725,5 +812,14 @@ select {
   .settlement-table th:nth-child(3),
   .settlement-table td:nth-child(3) {
     width: 128px;
+  }
+
+  .settlement-options {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .select-shell input {
+    width: 84px;
   }
 }

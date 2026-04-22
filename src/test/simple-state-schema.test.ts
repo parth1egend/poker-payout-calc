@@ -13,6 +13,7 @@ describe("calculator state normalization", () => {
     expect(normalized.id).toBe("current");
     expect(normalized.mode).toBe("cashflow");
     expect(normalized.currencyLabel).toBe("USD");
+    expect(normalized.thresholdMinor).toBe(20);
     expect(normalized.rows.length).toBe(1);
   });
 
@@ -39,6 +40,19 @@ describe("calculator state normalization", () => {
     expect(row.netMinor).toBe(25);
     expect(normalized.mode).toBe("net");
     expect(normalized.currencyLabel).toBe("INR");
+    expect(normalized.thresholdMinor).toBe(20);
+  });
+
+  it("normalizes threshold to non-negative safe integer values", () => {
+    const negative = normalizeCalculatorState({
+      thresholdMinor: -200
+    });
+    expect(negative.thresholdMinor).toBe(0);
+
+    const decimal = normalizeCalculatorState({
+      thresholdMinor: 45.9
+    });
+    expect(decimal.thresholdMinor).toBe(45);
   });
 
   it("caps row count and keeps at least one row", () => {
